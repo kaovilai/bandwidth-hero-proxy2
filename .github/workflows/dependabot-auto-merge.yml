@@ -1,0 +1,47 @@
+name: Dependabot auto-merge
+
+"on":
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      # Prerequisites:
+      # - Repository settings must allow auto-merge.
+      # - Branch protection and required checks should enforce the conditions that
+      #   must pass before GitHub completes the merge.
+      #
+      # This workflow intentionally does not check out or execute code from the
+      # pull request branch because it runs on pull_request_target.
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for eligible npm updates
+        if: >-
+          steps.metadata.outputs.package-ecosystem == 'npm' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if [ "$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')" = "true" ]; then
+            echo "Auto-merge is already enabled for this pull request."
+            exit 0
+          fi
+
+          gh pr merge --auto --squash "$PR_URL"
